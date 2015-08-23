@@ -1,0 +1,58 @@
+2015/08/24 00:26:05 client.go:96: Start TCP setting
+2015/08/24 00:26:05 client.go:108: Start TCP dial
+2015/08/24 00:26:05 client.go:119: Set TCP conn deadline
+2015/08/24 00:26:05 client.go:125: Start sending PING message
+2015/08/24 00:26:05 client.go:129: Start receiving message
+2015/08/24 00:26:05 client.go:132: Start getting keyboard inputs
+2015/08/24 00:26:05 client.go:135: Start main loop
+2015/08/24 00:26:26 client.go:96: Start TCP setting
+2015/08/24 00:26:26 client.go:108: Start TCP dial
+2015/08/24 00:26:26 client.go:119: Set TCP conn deadline
+2015/08/24 00:26:26 client.go:125: Start sending PING message
+2015/08/24 00:26:26 client.go:129: Start receiving message
+2015/08/24 00:26:26 client.go:132: Start getting keyboard inputs
+2015/08/24 00:26:26 client.go:135: Start main loop
+2015/08/24 00:26:51 client.go:96: Start TCP setting
+2015/08/24 00:26:51 client.go:108: Start TCP dial
+2015/08/24 00:27:26 client.go:119: Set TCP conn deadline
+2015/08/24 00:27:26 client.go:125: Start sending PING message
+2015/08/24 00:27:26 client.go:129: Start receiving message
+2015/08/24 00:27:26 client.go:132: Start getting keyboard inputs
+2015/08/24 00:27:26 client.go:135: Start main loop
+2015/08/24 00:27:51 client.go:96: Start TCP setting
+2015/08/24 00:27:51 client.go:108: Start TCP dial
+2015/08/24 00:27:51 client.go:119: Set TCP conn deadline
+2015/08/24 00:27:51 client.go:125: Start sending PING message
+2015/08/24 00:27:51 client.go:129: Start receiving message
+2015/08/24 00:27:51 client.go:132: Start getting keyboard inputs
+2015/08/24 00:27:51 client.go:135: Start main loop
+2015/08/24 00:28:07 client.go:96: Start TCP setting
+2015/08/24 00:28:07 client.go:108: Start TCP dial
+2015/08/24 00:28:07 client.go:119: Set TCP conn deadline
+2015/08/24 00:28:07 client.go:125: Start sending PING message
+2015/08/24 00:28:07 client.go:129: Start receiving message
+2015/08/24 00:28:07 client.go:132: Start getting keyboard inputs
+2015/08/24 00:28:07 client.go:135: Start main loop
+2015/08/24 00:28:21 client.go:96: Start TCP setting
+2015/08/24 00:28:21 client.go:108: Start TCP dial
+2015/08/24 00:28:56 client.go:119: Set TCP conn deadline
+2015/08/24 00:28:56 client.go:125: Start sending PING message
+2015/08/24 00:28:56 client.go:129: Start receiving message
+2015/08/24 00:28:56 client.go:132: Start getting keyboard inputs
+2015/08/24 00:28:56 client.go:135: Start main loop
+2015/08/24 00:31:56 client.go:93: Start TCP setting
+2015/08/24 00:31:56 client.go:105: Start TCP dial
+2015/08/24 00:31:56 client.go:116: Set TCP conn deadline
+2015/08/24 00:31:56 client.go:122: Start sending PING message
+2015/08/24 00:31:56 client.go:126: Start receiving message
+2015/08/24 00:31:56 client.go:129: Start getting keyboard inputs
+2015/08/24 00:31:56 client.go:132: Start main loop
+2015/08/24 00:32:05 client.go:174: Exit by quit signal from server message
+2015/08/24 00:32:13 client.go:93: Start TCP setting
+2015/08/24 00:32:13 client.go:105: Start TCP dial
+2015/08/24 00:32:48 client.go:116: Set TCP conn deadline
+2015/08/24 00:32:48 client.go:122: Start sending PING message
+2015/08/24 00:32:48 client.go:126: Start receiving message
+2015/08/24 00:32:48 client.go:129: Start getting keyboard inputs
+2015/08/24 00:32:48 client.go:132: Start main loop
+2015/08/24 00:33:03 client.go:174: Exit by quit signal from server message

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"strconv"
@@ -22,18 +23,18 @@ const (
 
 // ConnClient has a basic conversation functions for TCP connection.
 type ConnClient struct {
-	conn *net.TCPConn
+	conn net.Conn
 }
 
 // Ping send ping with certain interval.
 func (c *ConnClient) Ping(done <-chan struct{}) {
+	waitSig := time.Tick(360 * time.Second)
 	for {
 		select {
 		case <-done:
 			return
-		default:
+		case <-waitSig:
 			c.conn.Write([]byte("PING -1\r\n"))
-			time.Sleep(360000 * time.Millisecond)
 		}
 	}
 }
@@ -50,7 +51,12 @@ func (c *ConnClient) Receive(done <-chan struct{}) <-chan string {
 			default:
 				msg := make([]byte, 1024)
 				readlen, err := c.conn.Read(msg)
-				errCheck(err)
+				if err != nil {
+					if err.Error() == io.EOF.Error() {
+						out <- "quit"
+						return
+					}
+				}
 				out <- string(msg[:readlen])
 			}
 		}
@@ -66,6 +72,13 @@ func (c *ConnClient) Send(msg string) error {
 }
 
 func main() {
+	file, err := os.OpenFile("./log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatal("error opening file :", err.Error())
+	}
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	log.SetOutput(file)
+
 	// Set termbox
 	if err := termbox.Init(); err != nil {
 		fmt.Println("ERROR: Cannot initialize termbox")
@@ -75,9 +88,9 @@ func main() {
 	var eb EditBox
 	termbox.SetInputMode(termbox.InputEsc)
 	eb.Draw()
-	termbox.SetCell(1, 1, 't', termbox.ColorDefault, termbox.ColorDefault)
 	termbox.Flush()
 
+	log.Println("Start TCP setting")
 	// Set TCP connection
 	tcpAddr, err := net.ResolveTCPAddr("tcp", host+":"+port)
 	if err != nil {
@@ -89,6 +102,7 @@ func main() {
 	clientAddr.IP = net.ParseIP(clientIP)
 	clientAddr.Port, _ = strconv.Atoi(clientPort)
 
+	log.Println("Start TCP dial")
 	conn, err := net.DialTCP("tcp", clientAddr, tcpAddr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
@@ -96,15 +110,26 @@ func main() {
 	}
 
 	done := make(chan struct{})
+	defer close(done)
 	defer conn.Close()
+
+	log.Println("Set TCP conn deadline")
 	conn.SetReadDeadline(time.Now().Add(400 * time.Second))
 	conn.SetWriteDeadline(time.Now().Add(400 * time.Second))
+
 	c := &ConnClient{conn: conn}
+
+	log.Println("Start sending PING message")
 	go c.Ping(done)
 	//input := scan(done)
+
+	log.Println("Start receiving message")
 	response := c.Receive(done)
+
+	log.Println("Start getting keyboard inputs")
 	keyInput := Input(done)
 
+	log.Println("Start main loop")
 	for {
 		select {
 		case k := <-keyInput:
@@ -121,7 +146,7 @@ func main() {
 					bmsg := eb.GetAndDeleteText()
 					message := string(bmsg[:])
 					if message == "quit" {
-						fmt.Println("OK quit")
+						log.Println("Exit by quit signal from keyboard input")
 						done <- struct{}{}
 						return
 					}
@@ -129,6 +154,7 @@ func main() {
 					message += "\r\n"
 					conn.Write([]byte(message))
 				case termbox.KeyEsc:
+					log.Println("Exit by KeyEsc signal")
 					done <- struct{}{}
 					return
 				case termbox.KeySpace:
@@ -144,6 +170,10 @@ func main() {
 		case responseMsg := <-response:
 			testConversation[0] = "Server response: " + responseMsg
 			switch responseMsg {
+			case "quit":
+				log.Println("Exit by quit signal from server message")
+				done <- struct{}{}
+				return
 			case "OK PING\r\n":
 				conn.SetReadDeadline(time.Now().Add(400 * time.Second))
 				conn.SetWriteDeadline(time.Now().Add(400 * time.Second))
@@ -152,28 +182,7 @@ func main() {
 			termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 			eb.Draw()
 		}
-
 	}
-
-	// for {
-	// 	select {
-	// 	case message := <-input:
-	// 		if strings.TrimSuffix(message, "\n\r\n") == "quit" {
-	// 			fmt.Println("OK quit")
-	// 			done <- struct{}{}
-	// 			return
-	// 		}
-	// 		conn.Write([]byte(message))
-	// 	case responseMsg := <-response:
-	// 		fmt.Println("Server response: " + responseMsg)
-	// 		switch responseMsg {
-	// 		case "OK PING\r\n":
-	// 			conn.SetReadDeadline(time.Now().Add(400 * time.Second))
-	// 			conn.SetWriteDeadline(time.Now().Add(400 * time.Second))
-	//              }
-	// 	}
-	// }
-
 }
 
 func scan(done chan struct{}) <-chan string {
