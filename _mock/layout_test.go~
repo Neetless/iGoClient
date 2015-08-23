@@ -1,0 +1,18 @@
+package mainloop
+
+import (
+	"fmt"
+	"testing"
+)
+
+type mockDrawable struct {
+	id int
+}
+
+func (md *mockDrawable) Draw() {
+	fmt.Printf("This mock id is %d\n")
+}
+
+func TestWholeScreen(t *testing.T) {
+
+}

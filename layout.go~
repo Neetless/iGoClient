@@ -1,0 +1,133 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"unicode/utf8"
+
+	"github.com/nsf/termbox-go"
+)
+
+// Drawable is a interface which has screen draw function.
+type Drawable interface {
+	Draw()
+}
+
+// WholeScreen has every parts of screen box and draw all.
+type WholeScreen struct {
+	screenBoxes []Drawable
+}
+
+func (ws *WholeScreen) drawAll() {
+	for _, box := range ws.screenBoxes {
+		box.Draw()
+	}
+}
+
+func (ws *WholeScreen) append(box Drawable) {
+	ws.screenBoxes = append(ws.screenBoxes, box)
+}
+
+// TODO Not tested and not used
+func setCellLine(x, y int, fg, bg termbox.Attribute, msg string) {
+	for _, c := range msg {
+		termbox.SetCell(x, y, c, fg, bg)
+		x++
+	}
+}
+
+// EditBox position
+const ()
+
+// EditBox is a user input part.
+type EditBox struct {
+	text          []byte
+	lineVoffset   int
+	cursorBoffset int
+	cursorVoffset int
+	cursorCoffset int
+
+	// Fort test field
+	testChar rune
+}
+
+// Draw EditBox part on screen.
+func (eb *EditBox) Draw() {
+	// Stub
+	termbox.SetCell(0, 0, eb.testChar, termbox.ColorDefault, termbox.ColorDefault)
+	termbox.Flush()
+}
+
+// InsertRune insert character to EditBox.text
+func (eb *EditBox) InsertRune(r rune) {
+	var buf [utf8.UTFMax]byte
+	n := utf8.EncodeRune(buf[:], r)
+	eb.text = byteSliceInsert(eb.text, eb.cursorBoffset, buf[:n])
+}
+
+func byteSliceResize(s []byte, desiredCap int) []byte {
+	if cap(s) < desiredCap {
+		ns := make([]byte, len(s), desiredCap)
+		copy(ns, s)
+		return ns
+	}
+	return s
+}
+
+func byteSliceInsert(text []byte, offset int, what []byte) []byte {
+	n := len(text) + len(what)
+	text = byteSliceResize(text, n)
+	text = text[:n]
+	copy(text[offset+len(what):], text[offset:])
+	copy(text[offset:], what)
+	return text
+}
+
+// Input wait and hundle keyboard input.
+// This function interrupt process.
+func Input(done <-chan struct{}) <-chan rune {
+	if !termbox.IsInit {
+		// TODO use logrus
+		fmt.Errorf("ERROR: termbox is not initialized\n")
+		os.Exit(1)
+	}
+	termbox.SetInputMode(termbox.InputEsc)
+	out := make(chan rune)
+	go func() {
+		defer close(out)
+	inputloop:
+		for {
+			switch ev := termbox.PollEvent(); ev.Type {
+			case termbox.EventKey:
+				switch ev.Key {
+				case termbox.KeyEsc:
+					break inputloop
+				default:
+					out <- ev.Ch
+					// if ev.Ch != 0 {
+					// 	eb.InsertRune(ev.Ch)
+					// }
+				}
+			case termbox.EventError:
+
+				// This panic has a potential bug.
+				// defer termbox.Close() doesn't run when panic.
+				// panic(ev.Err)
+			}
+			// Terminaite this go routine when done signal come.
+			select {
+			case <-done:
+				return
+			}
+		}
+	}()
+	return out
+}
+
+func redraw() {
+	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+	//x, y := termbox.Size()
+	ch := []rune("a")
+	termbox.SetCell(0, 0, ch[0], termbox.ColorDefault, termbox.ColorDefault)
+	termbox.Flush()
+}

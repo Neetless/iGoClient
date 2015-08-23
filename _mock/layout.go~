@@ -1,0 +1,27 @@
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/nsf/termbox-go"
+)
+
+func redraw() {
+	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+	x, y := termbox.Size()
+	fmt.Println("1")
+	fmt.Printf("x = %d, y = %d", x, y)
+}
+
+func main() {
+	if err := termbox.Init(); err != nil {
+		fmt.Printf("Fatal error: %s\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("1")
+	defer termbox.Close()
+	termbox.SetInputMode(termbox.InputEsc)
+	fmt.Println("1")
+	redraw()
+}
