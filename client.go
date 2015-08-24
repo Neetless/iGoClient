@@ -85,10 +85,20 @@ func main() {
 		os.Exit(1)
 	}
 	defer termbox.Close()
-	var eb EditBox
+	// Set screens
+	eb := &EditBox{}
+	ws := &WholeScreen{}
+	connMsg := NewTextBox(20)
+	ts := &TextScreen{}
+	ts.SetTextArea(connMsg)
+	ws.append(eb)
+	ws.append(ts)
+
+	// Draw initial screen
 	termbox.SetInputMode(termbox.InputEsc)
-	eb.Draw()
-	termbox.Flush()
+	ws.drawAll()
+	//eb.Draw()
+	//termbox.Flush()
 
 	log.Println("Start TCP setting")
 	// Set TCP connection
@@ -168,19 +178,21 @@ func main() {
 				return
 			}
 		case responseMsg := <-response:
-			testConversation[0] = "Server response: " + responseMsg
+			connMsg.AppendText("Server response: " + responseMsg)
 			switch responseMsg {
 			case "quit":
 				log.Println("Exit by quit signal from server message")
 				done <- struct{}{}
 				return
 			case "OK PING\r\n":
-				conn.SetReadDeadline(time.Now().Add(400 * time.Second))
-				conn.SetWriteDeadline(time.Now().Add(400 * time.Second))
+				c.conn.SetReadDeadline(time.Now().Add(400 * time.Second))
+				c.conn.SetWriteDeadline(time.Now().Add(400 * time.Second))
+			case "SVR_PING\r\n":
+				c.Send("OK SVR_PING")
 			}
 		default:
 			termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-			eb.Draw()
+			ws.drawAll()
 		}
 	}
 }

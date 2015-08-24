@@ -8,12 +8,70 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
-const maxLine = 3
+// TextArea define what TextArea needs.
+type TextArea interface {
+	AppendText(text string)
+	GetText(n int) string
+	GetMaxLine() int
+}
 
-// ChatStrs is a list of chat conversation.
-type ChatStrs [maxLine]string
+// TextScreen manage what should show in the text area.
+type TextScreen struct {
+	ta TextArea
+}
 
-var testConversation = ChatStrs{"あいうえお", "123456", "testtesttest"}
+// SetTextArea set TextArea field.
+func (ts *TextScreen) SetTextArea(ta TextArea) {
+	ts.ta = ta
+}
+
+// GetTextArea return TextArea field.
+func (ts *TextScreen) GetTextArea() TextArea {
+	return ts.ta
+}
+
+// Draw textlog.
+func (ts *TextScreen) Draw() {
+	for i := 0; i < ts.GetTextArea().GetMaxLine(); i++ {
+		setCellLine(0, i+2,
+			termbox.ColorDefault, termbox.ColorDefault,
+			ts.GetTextArea().GetText(i))
+	}
+	//termbox.Flush()
+}
+
+// TextBox store maxLine number of texts.
+type TextBox struct {
+	maxLine        int
+	oldestPosition int
+	textLogs       []string
+}
+
+// NewTextBox create TextBox instance.
+func NewTextBox(maxLine int) *TextBox {
+	return &TextBox{maxLine, 0, make([]string, maxLine)}
+}
+
+// GetText return the ordered textLog.
+func (tb *TextBox) GetText(n int) string {
+	position := (tb.oldestPosition+tb.maxLine-1)%tb.maxLine - n
+	for position < 0 {
+		position = tb.maxLine + position
+	}
+	return tb.textLogs[position]
+}
+
+// AppendText append text to textLogs.
+func (tb *TextBox) AppendText(text string) {
+	tb.textLogs[tb.oldestPosition] = text
+	// Set position to oldest log.
+	tb.oldestPosition = (tb.oldestPosition + 1) % tb.maxLine
+}
+
+// GetMaxLine return number of text log's line.
+func (tb *TextBox) GetMaxLine() int {
+	return tb.maxLine
+}
 
 // Drawable is a interface which has screen draw function.
 type Drawable interface {
@@ -29,6 +87,7 @@ func (ws *WholeScreen) drawAll() {
 	for _, box := range ws.screenBoxes {
 		box.Draw()
 	}
+	termbox.Flush()
 }
 
 func (ws *WholeScreen) append(box Drawable) {
@@ -107,17 +166,9 @@ func (eb *EditBox) Draw() {
 	setCellLine(0, 1,
 		termbox.ColorDefault, termbox.ColorDefault,
 		"------------------------------------------")
-	// Set conversation logs
-	// TODO: This should be in another function and register to wholescreen.
-	// This is just for test.
-	for index, line := range testConversation {
-		setCellLine(0, index+2,
-			termbox.ColorDefault, termbox.ColorDefault,
-			line)
-	}
 	// Highlight cursor position.
 	termbox.SetCursor(eb.cursorVoffset, 0)
-	termbox.Flush()
+	//termbox.Flush()
 }
 
 // MoveCursorTo move cursor position by given offset

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	utf8 "unicode/utf8"
 
@@ -54,7 +56,33 @@ func TestMoveCursor(t *testing.T) {
 	eb.InsertRune(r)
 }
 
-//
+func TestAppendOfTextBox(t *testing.T) {
+	tb := NewTextBox(5)
+	templateMsg := "count %v"
+	/*
+		tb.AppendText(fmt.Sprintf(templateMsg, 1))
+		t.Logf(tb.GetText(0))
+		tb.AppendText(fmt.Sprintf(templateMsg, 2))
+		t.Logf(tb.GetText(0))
+		t.Logf(tb.GetText(1))
+	*/
+	for i := 0; i < 10; i++ {
+		tb.AppendText(fmt.Sprintf(templateMsg, i))
+		for j := 0; j < tb.maxLine; j++ {
+			var expected string
+			if i-j < 0 {
+				expected = ""
+			} else {
+				expected = fmt.Sprintf(templateMsg, i-j)
+			}
+			result := tb.GetText(j)
+			if !strings.EqualFold(expected, result) {
+				t.Errorf("Unexpected strings.\nexpected: %v\nresult: %v", expected, result)
+			}
+		}
+	}
+}
+
 func TestEditBoxDraw(t *testing.T) {
 	if err := termbox.Init(); err != nil {
 		t.Logf("ERROR: Cannot initialize termbox")
