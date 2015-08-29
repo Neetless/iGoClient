@@ -10,5 +10,5 @@ log
 *.cpu
 
 # temporary work files
-_mock
+_mock/
 messageList.md
