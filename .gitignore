@@ -1,0 +1,14 @@
+# temporary files
+*~
+*.swp
+
+# log files
+log
+
+# test files
+*.test
+*.cpu
+
+# temporary work files
+_mock
+messageList.md

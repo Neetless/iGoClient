@@ -83,6 +83,13 @@ func TestAppendOfTextBox(t *testing.T) {
 	}
 }
 
+func TestRoomBox(t *testing.T) {
+	rb := NewRoomBox(10)
+	for _, r := range rb.rooms {
+		t.Logf("%v", r)
+	}
+}
+
 func TestEditBoxDraw(t *testing.T) {
 	if err := termbox.Init(); err != nil {
 		t.Logf("ERROR: Cannot initialize termbox")

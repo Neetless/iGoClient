@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -18,12 +19,25 @@ const (
 	host       = "localhost" //"192.168.3.3"
 	port       = "1586"
 	clientIP   = "127.0.0.1" //"192.168.3.8"
-	clientPort = "1515"
+	clientPort = "1517"
+)
+
+// Mode switches input and output style.
+type Mode string
+
+const (
+	// RoomMode is used for identifing mode to controll rooms.
+	RoomMode = "Room"
+	// ChatMode is used for identifing mode to controll chat.
+	ChatMode = "Chat"
+	// DirectMode is used for sending message directly.
+	DirectMode = "Direct"
 )
 
 // ConnClient has a basic conversation functions for TCP connection.
 type ConnClient struct {
 	conn net.Conn
+	mode Mode
 }
 
 // Ping send ping with certain interval.
@@ -34,7 +48,9 @@ func (c *ConnClient) Ping(done <-chan struct{}) {
 		case <-done:
 			return
 		case <-waitSig:
-			c.conn.Write([]byte("PING -1\r\n"))
+			c.Send("PING -1")
+			c.conn.SetReadDeadline(time.Now().Add(400 * time.Second))
+			c.conn.SetWriteDeadline(time.Now().Add(400 * time.Second))
 		}
 	}
 }
@@ -57,6 +73,8 @@ func (c *ConnClient) Receive(done <-chan struct{}) <-chan string {
 						return
 					}
 				}
+				log.Println("Server responce: " +
+					string(msg[:readlen]))
 				out <- string(msg[:readlen])
 			}
 		}
@@ -67,7 +85,27 @@ func (c *ConnClient) Receive(done <-chan struct{}) <-chan string {
 // Send send message to server.
 func (c *ConnClient) Send(msg string) error {
 	// TODO: implement
-	_, err := c.conn.Write([]byte("msg"))
+	var arrangedMsg string
+	switch c.mode {
+	case DirectMode:
+		arrangedMsg = msg
+	case RoomMode:
+		// Get parameter like "OPEN 1".
+		msgTokens := strings.Split(msg, " ")
+		switch msgTokens[0] {
+		case "OPEN":
+			arrangedMsg = "OPEN_ROOM " + msgTokens[1]
+		case "CLOSE":
+			arrangedMsg = "CLOSE_ROOM " + msgTokens[1]
+		}
+	case ChatMode:
+		// Get parameter like "1 some message"
+		msgTokens := strings.SplitAfterN(msg, " ", 2)
+		arrangedMsg = "SHOUT " + msgTokens[0] + " " + msgTokens[1]
+
+	}
+	_, err := c.conn.Write([]byte((arrangedMsg + "\r\n")[:]))
+
 	return err
 }
 
@@ -89,6 +127,9 @@ func main() {
 	eb := &EditBox{}
 	ws := &WholeScreen{}
 	connMsg := NewTextBox(20)
+	roomList := NewRoomBox(20)
+	chatLogs := NewChatBox(20)
+
 	ts := &TextScreen{}
 	ts.SetTextArea(connMsg)
 	ws.append(eb)
@@ -97,8 +138,6 @@ func main() {
 	// Draw initial screen
 	termbox.SetInputMode(termbox.InputEsc)
 	ws.drawAll()
-	//eb.Draw()
-	//termbox.Flush()
 
 	log.Println("Start TCP setting")
 	// Set TCP connection
@@ -127,7 +166,7 @@ func main() {
 	conn.SetReadDeadline(time.Now().Add(400 * time.Second))
 	conn.SetWriteDeadline(time.Now().Add(400 * time.Second))
 
-	c := &ConnClient{conn: conn}
+	c := &ConnClient{conn: conn, mode: DirectMode}
 
 	log.Println("Start sending PING message")
 	go c.Ping(done)
@@ -138,6 +177,9 @@ func main() {
 
 	log.Println("Start getting keyboard inputs")
 	keyInput := Input(done)
+
+	log.Println("Start login conversation")
+	loginConversation(c)
 
 	log.Println("Start main loop")
 	for {
@@ -155,14 +197,21 @@ func main() {
 				case termbox.KeyEnter:
 					bmsg := eb.GetAndDeleteText()
 					message := string(bmsg[:])
-					if message == "quit" {
+					msgTokens := strings.Split(message, " ")
+					switch msgTokens[0] {
+					case "quit":
 						log.Println("Exit by quit signal from keyboard input")
 						done <- struct{}{}
 						return
+					case "ROOM":
+						if c.mode == ChatMode {
+							roomID, _ := strconv.Atoi(msgTokens[1])
+							chatLogs.CurrentRoomID = roomID
+						}
+						continue
 					}
 					// Server require new line character
-					message += "\r\n"
-					conn.Write([]byte(message))
+					c.Send(message)
 				case termbox.KeyEsc:
 					log.Println("Exit by KeyEsc signal")
 					done <- struct{}{}
@@ -170,6 +219,21 @@ func main() {
 				case termbox.KeySpace:
 					r, _ := utf8.DecodeLastRune([]byte(" "))
 					eb.InsertRune(r)
+				case termbox.KeyF9:
+					switch c.mode {
+					case DirectMode:
+						c.mode = RoomMode
+						ts.SetTextArea(roomList)
+					case RoomMode:
+						c.mode = ChatMode
+						ts.SetTextArea(chatLogs)
+					case ChatMode:
+						c.mode = DirectMode
+						ts.SetTextArea(connMsg)
+					}
+
+				case termbox.KeyF3:
+					ts.SetTextArea(connMsg)
 				default:
 					eb.InsertRune(k.Ch)
 				}
@@ -178,17 +242,45 @@ func main() {
 				return
 			}
 		case responseMsg := <-response:
-			connMsg.AppendText("Server response: " + responseMsg)
-			switch responseMsg {
-			case "quit":
-				log.Println("Exit by quit signal from server message")
-				done <- struct{}{}
-				return
-			case "OK PING\r\n":
-				c.conn.SetReadDeadline(time.Now().Add(400 * time.Second))
-				c.conn.SetWriteDeadline(time.Now().Add(400 * time.Second))
-			case "SVR_PING\r\n":
-				c.Send("OK SVR_PING")
+			texts := strings.Split(responseMsg, "\r\n")
+			for _, s := range texts {
+				connMsg.AppendText("Server response: " + s)
+				tokens := strings.Split(s, " ")
+				switch tokens[0] {
+				case "quit":
+					log.Println("Exit by quit signal from server message")
+					done <- struct{}{}
+					return
+				case "MESSAGE":
+					var chat string
+					for _, str := range tokens[2:] {
+						chat += str + " "
+					}
+					id, _ := strconv.Atoi(tokens[1])
+					chatLogs.AppendText(id, chat)
+				case "OK":
+					switch tokens[1] {
+					case "PING":
+						c.conn.SetReadDeadline(time.Now().Add(400 * time.Second))
+						c.conn.SetWriteDeadline(time.Now().Add(400 * time.Second))
+					case "OPEN_ROOM":
+						id, _ := strconv.Atoi(tokens[2])
+						chatLogs.CurrentRoomID = id
+						roomList.EnterRoom(id)
+					case "CLOSE_ROOM":
+						id, _ := strconv.Atoi(tokens[2])
+						roomList.QuitRoom(id)
+					}
+				case "SVR_PING":
+					c.Send("OK SVR_PING")
+				case "ROOM_ADDED":
+					id, _ := strconv.Atoi(tokens[1])
+					ri := RoomInfo{id, tokens[3], tokens[4], false}
+					roomList.AppendRoom(ri)
+				case "ROOM_REMOVED":
+					id, _ := strconv.Atoi(tokens[1])
+					roomList.RemoveRoom(id)
+				}
 			}
 		default:
 			termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
@@ -225,4 +317,27 @@ func errCheck(err error) {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 		os.Exit(1)
 	}
+}
+
+type userInfo struct {
+	user         string
+	id           int
+	introduction string
+	level        string
+	clientInfo   string
+}
+
+func loginConversation(c *ConnClient) {
+	user := &userInfo{
+		"test",
+		1,
+		"I'm man",
+		"strong",
+		"java.vender, java.version, os.name, os.version"}
+	c.Send("LOGIN " + user.user)
+	c.Send("SET_INTRO " + user.introduction)
+	c.Send("SET_LEVEL " + user.level)
+	c.Send("CLIENT_INFO " + user.clientInfo)
+	c.Send("SET_ID " + fmt.Sprintf("%d", user.id))
+
 }

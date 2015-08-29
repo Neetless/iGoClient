@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"unicode/utf8"
 
@@ -10,7 +11,6 @@ import (
 
 // TextArea define what TextArea needs.
 type TextArea interface {
-	AppendText(text string)
 	GetText(n int) string
 	GetMaxLine() int
 }
@@ -71,6 +71,152 @@ func (tb *TextBox) AppendText(text string) {
 // GetMaxLine return number of text log's line.
 func (tb *TextBox) GetMaxLine() int {
 	return tb.maxLine
+}
+
+const (
+	// NotExist is one of the ID which identify not existing room log.
+	NotExist = -1
+)
+
+// ChatBox contain a every room's conversation logs.
+type ChatBox struct {
+	MaxRoom       int
+	CurrentRoomID int
+	ChatLogs      []ChatLog
+}
+
+// NewChatBox create new instance for ChatBox
+func NewChatBox(maxRoom int) *ChatBox {
+	MaxLogs := 30
+	logs := make([]ChatLog, maxRoom)
+	for i := range logs {
+		logs[i] = ChatLog{NotExist, MaxLogs, NewTextBox(MaxLogs)}
+	}
+	return &ChatBox{maxRoom, NotExist, logs}
+}
+
+// AppendText append chat log
+func (cb *ChatBox) AppendText(id int, chatLog string) {
+	// When cb has the room's conversation log.
+	for i, log := range cb.ChatLogs {
+		if log.RoomID == id {
+			cb.ChatLogs[i].Logs.AppendText(chatLog)
+			return
+		}
+	}
+
+	// When cb doesn't have the room's conversation log.
+	for i, cl := range cb.ChatLogs {
+		if cl.RoomID == NotExist {
+			cb.ChatLogs[i].RoomID = id
+			cb.ChatLogs[i].Logs.AppendText(chatLog)
+			return
+		}
+	}
+}
+
+// GetText return given line's text
+func (cb *ChatBox) GetText(n int) string {
+	if cb.CurrentRoomID == NotExist {
+		return " "
+	}
+	return cb.ChatLogs[cb.CurrentRoomID].Logs.GetText(n)
+}
+
+// GetMaxLine return max line of conversation.
+func (cb *ChatBox) GetMaxLine() int {
+	return cb.ChatLogs[0].MaxLine
+}
+
+// ChatLog contain a conversation log.
+type ChatLog struct {
+	RoomID  int
+	MaxLine int
+	Logs    *TextBox
+}
+
+// RoomBox has room list to show
+type RoomBox struct {
+	maxRoomNum int
+	rooms      []RoomInfo
+}
+
+// NewRoomBox is a constructor of RoomBox
+func NewRoomBox(max int) *RoomBox {
+	return &RoomBox{max, make([]RoomInfo, max)}
+}
+
+// GetText return
+func (r *RoomBox) GetText(n int) string {
+	entered := " "
+	if r.rooms[n].Entered {
+		entered = "entered"
+	}
+	return fmt.Sprintf("%d %s %s %s",
+		r.rooms[n].ID, r.rooms[n].Name, r.rooms[n].Owner, entered)
+}
+
+// GetMaxLine return the max number of array
+func (r *RoomBox) GetMaxLine() int {
+	return r.maxRoomNum
+}
+
+// RemoveRoom remove RoomInfo from list
+func (r *RoomBox) RemoveRoom(id int) {
+	for i, room := range r.rooms {
+		if room.ID == id {
+			r.rooms[i].ID = 0
+			return
+		}
+	}
+	log.Println("Cannot remove room. No such room.")
+}
+
+// AppendRoom append new room to the slice
+func (r *RoomBox) AppendRoom(ri RoomInfo) {
+	// Check whether the room already exist.
+	for _, room := range r.rooms {
+		if ri.ID == room.ID {
+			log.Println("Cannnot append room. The room already exists.")
+			return
+		}
+	}
+
+	// Add room where empty item in slice.
+	for i, room := range r.rooms {
+		if room.ID == 0 {
+			r.rooms[i] = ri
+			return
+		}
+	}
+
+}
+
+// EnterRoom chage flag to detect entered or not.
+func (r *RoomBox) EnterRoom(id int) {
+	for i, room := range r.rooms {
+		if room.ID == id {
+			r.rooms[i].Entered = true
+		}
+	}
+}
+
+// QuitRoom change flag to detect entered or not.
+func (r *RoomBox) QuitRoom(id int) {
+	for i, room := range r.rooms {
+		if room.ID == id {
+			r.rooms[i].Entered = false
+		}
+	}
+}
+
+// RoomInfo has a Room information
+type RoomInfo struct {
+	// When ID = 0, it means no RoomInfo
+	ID      int
+	Name    string
+	Owner   string
+	Entered bool
 }
 
 // Drawable is a interface which has screen draw function.
