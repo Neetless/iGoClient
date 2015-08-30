@@ -56,6 +56,24 @@ func TestMoveCursor(t *testing.T) {
 	eb.InsertRune(r)
 }
 
+func TestRoomList(t *testing.T) {
+	roomList := NewRoomBox(20)
+	chatLogs := NewChatBox(20, roomList.rooms)
+	roomList.AppendRoom(NewRoomInfo(1, "a", "b"))
+	roomList.OtherEnterRoom(1, "test")
+	t.Logf((*roomList.rooms)[0].Members[0])
+	t.Logf((*chatLogs.rooms)[0].Members[0])
+	chatLogs.CurrentRoomID = 1
+	chatLogs.ShowRoomMember = true
+	t.Logf(fmt.Sprintf("%d\n", chatLogs.CurrentRoomID))
+	t.Logf(chatLogs.GetText(0))
+	chatLogs.ShowRoomMember = false
+	t.Logf(chatLogs.GetText(0))
+
+	t.Logf(fmt.Sprintf("max line: %d", chatLogs.GetMaxLine()))
+
+}
+
 func TestAppendOfTextBox(t *testing.T) {
 	tb := NewTextBox(5)
 	templateMsg := "count %v"
@@ -85,7 +103,7 @@ func TestAppendOfTextBox(t *testing.T) {
 
 func TestRoomBox(t *testing.T) {
 	rb := NewRoomBox(10)
-	for _, r := range rb.rooms {
+	for _, r := range *rb.rooms {
 		t.Logf("%v", r)
 	}
 }

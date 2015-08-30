@@ -80,19 +80,21 @@ const (
 
 // ChatBox contain a every room's conversation logs.
 type ChatBox struct {
-	MaxRoom       int
-	CurrentRoomID int
-	ChatLogs      []ChatLog
+	MaxRoom        int
+	CurrentRoomID  int
+	ChatLogs       []ChatLog
+	rooms          *[]RoomInfo
+	ShowRoomMember bool
 }
 
 // NewChatBox create new instance for ChatBox
-func NewChatBox(maxRoom int) *ChatBox {
+func NewChatBox(maxRoom int, rooms *[]RoomInfo) *ChatBox {
 	MaxLogs := 30
 	logs := make([]ChatLog, maxRoom)
 	for i := range logs {
 		logs[i] = ChatLog{NotExist, MaxLogs, NewTextBox(MaxLogs)}
 	}
-	return &ChatBox{maxRoom, NotExist, logs}
+	return &ChatBox{maxRoom, NotExist, logs, rooms, false}
 }
 
 // AppendText append chat log
@@ -120,11 +122,33 @@ func (cb *ChatBox) GetText(n int) string {
 	if cb.CurrentRoomID == NotExist {
 		return " "
 	}
-	return cb.ChatLogs[cb.CurrentRoomID].Logs.GetText(n)
+
+	if cb.ShowRoomMember {
+		for _, room := range *cb.rooms {
+			if room.ID == cb.CurrentRoomID {
+				return fmt.Sprintf("Room %d %s", room.ID, room.Members[n])
+			}
+		}
+	}
+	for _, chatlog := range cb.ChatLogs {
+		if chatlog.RoomID == cb.CurrentRoomID {
+			return chatlog.Logs.GetText(n)
+		}
+	}
+	return " "
+
 }
 
 // GetMaxLine return max line of conversation.
 func (cb *ChatBox) GetMaxLine() int {
+	if cb.ShowRoomMember {
+		for _, room := range *cb.rooms {
+			if room.ID == cb.CurrentRoomID {
+				return room.MaxMember
+			}
+		}
+		return 0
+	}
 	return cb.ChatLogs[0].MaxLine
 }
 
@@ -138,22 +162,23 @@ type ChatLog struct {
 // RoomBox has room list to show
 type RoomBox struct {
 	maxRoomNum int
-	rooms      []RoomInfo
+	rooms      *[]RoomInfo
 }
 
 // NewRoomBox is a constructor of RoomBox
 func NewRoomBox(max int) *RoomBox {
-	return &RoomBox{max, make([]RoomInfo, max)}
+	ris := make([]RoomInfo, max)
+	return &RoomBox{max, &ris}
 }
 
 // GetText return
 func (r *RoomBox) GetText(n int) string {
 	entered := " "
-	if r.rooms[n].Entered {
+	if (*r.rooms)[n].Entered {
 		entered = "entered"
 	}
 	return fmt.Sprintf("%d %s %s %s",
-		r.rooms[n].ID, r.rooms[n].Name, r.rooms[n].Owner, entered)
+		(*r.rooms)[n].ID, (*r.rooms)[n].Name, (*r.rooms)[n].Owner, entered)
 }
 
 // GetMaxLine return the max number of array
@@ -163,9 +188,9 @@ func (r *RoomBox) GetMaxLine() int {
 
 // RemoveRoom remove RoomInfo from list
 func (r *RoomBox) RemoveRoom(id int) {
-	for i, room := range r.rooms {
+	for i, room := range *r.rooms {
 		if room.ID == id {
-			r.rooms[i].ID = 0
+			(*r.rooms)[i].ID = 0
 			return
 		}
 	}
@@ -175,7 +200,7 @@ func (r *RoomBox) RemoveRoom(id int) {
 // AppendRoom append new room to the slice
 func (r *RoomBox) AppendRoom(ri RoomInfo) {
 	// Check whether the room already exist.
-	for _, room := range r.rooms {
+	for _, room := range *r.rooms {
 		if ri.ID == room.ID {
 			log.Println("Cannnot append room. The room already exists.")
 			return
@@ -183,29 +208,62 @@ func (r *RoomBox) AppendRoom(ri RoomInfo) {
 	}
 
 	// Add room where empty item in slice.
-	for i, room := range r.rooms {
+	for i, room := range *r.rooms {
 		if room.ID == 0 {
-			r.rooms[i] = ri
+			(*r.rooms)[i] = ri
 			return
 		}
 	}
 
 }
 
+const (
+	// EmptyMember used for identify empty room member.
+	EmptyMember = ""
+)
+
+// OtherEnterRoom is detect someone entered a room and add the member to the room member list.
+func (r *RoomBox) OtherEnterRoom(roomID int, name string) {
+	for i, room := range *r.rooms {
+		if room.ID == roomID {
+			for j, member := range room.Members {
+				if member == EmptyMember {
+					(*r.rooms)[i].Members[j] = name
+					return
+				}
+			}
+		}
+	}
+}
+
+// OtherLeaveRoom remove given member from member list.
+func (r *RoomBox) OtherLeaveRoom(roomID int, name string) {
+	for i, room := range *r.rooms {
+		if room.ID == roomID {
+			for j, member := range room.Members {
+				if member == name {
+					(*r.rooms)[i].Members[j] = EmptyMember
+					return
+				}
+			}
+		}
+	}
+}
+
 // EnterRoom chage flag to detect entered or not.
 func (r *RoomBox) EnterRoom(id int) {
-	for i, room := range r.rooms {
+	for i, room := range *r.rooms {
 		if room.ID == id {
-			r.rooms[i].Entered = true
+			(*r.rooms)[i].Entered = true
 		}
 	}
 }
 
 // QuitRoom change flag to detect entered or not.
 func (r *RoomBox) QuitRoom(id int) {
-	for i, room := range r.rooms {
+	for i, room := range *r.rooms {
 		if room.ID == id {
-			r.rooms[i].Entered = false
+			(*r.rooms)[i].Entered = false
 		}
 	}
 }
@@ -213,10 +271,18 @@ func (r *RoomBox) QuitRoom(id int) {
 // RoomInfo has a Room information
 type RoomInfo struct {
 	// When ID = 0, it means no RoomInfo
-	ID      int
-	Name    string
-	Owner   string
-	Entered bool
+	ID        int
+	Name      string
+	Owner     string
+	MaxMember int
+	Members   []string
+	Entered   bool
+}
+
+// NewRoomInfo is a constructor of RoomInfo.
+func NewRoomInfo(id int, name, owner string) RoomInfo {
+	// Assume max member is 30.
+	return RoomInfo{id, name, owner, 10, make([]string, 10), false}
 }
 
 // Drawable is a interface which has screen draw function.

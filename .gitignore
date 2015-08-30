@@ -12,3 +12,6 @@ log
 # temporary work files
 _mock/
 messageList.md
+
+# config files
+config.go*

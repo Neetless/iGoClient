@@ -15,13 +15,6 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
-const (
-	host       = "localhost" //"192.168.3.3"
-	port       = "1586"
-	clientIP   = "127.0.0.1" //"192.168.3.8"
-	clientPort = "1517"
-)
-
 // Mode switches input and output style.
 type Mode string
 
@@ -32,6 +25,8 @@ const (
 	ChatMode = "Chat"
 	// DirectMode is used for sending message directly.
 	DirectMode = "Direct"
+	// MemberMode is used for showing member
+	MemberMode = "Member"
 )
 
 // ConnClient has a basic conversation functions for TCP connection.
@@ -84,28 +79,7 @@ func (c *ConnClient) Receive(done <-chan struct{}) <-chan string {
 
 // Send send message to server.
 func (c *ConnClient) Send(msg string) error {
-	// TODO: implement
-	var arrangedMsg string
-	switch c.mode {
-	case DirectMode:
-		arrangedMsg = msg
-	case RoomMode:
-		// Get parameter like "OPEN 1".
-		msgTokens := strings.Split(msg, " ")
-		switch msgTokens[0] {
-		case "OPEN":
-			arrangedMsg = "OPEN_ROOM " + msgTokens[1]
-		case "CLOSE":
-			arrangedMsg = "CLOSE_ROOM " + msgTokens[1]
-		}
-	case ChatMode:
-		// Get parameter like "1 some message"
-		msgTokens := strings.SplitAfterN(msg, " ", 2)
-		arrangedMsg = "SHOUT " + msgTokens[0] + " " + msgTokens[1]
-
-	}
-	_, err := c.conn.Write([]byte((arrangedMsg + "\r\n")[:]))
-
+	_, err := c.conn.Write([]byte(msg + "\r\n")[:])
 	return err
 }
 
@@ -128,7 +102,7 @@ func main() {
 	ws := &WholeScreen{}
 	connMsg := NewTextBox(20)
 	roomList := NewRoomBox(20)
-	chatLogs := NewChatBox(20)
+	chatLogs := NewChatBox(20, roomList.rooms)
 
 	ts := &TextScreen{}
 	ts.SetTextArea(connMsg)
@@ -141,20 +115,22 @@ func main() {
 
 	log.Println("Start TCP setting")
 	// Set TCP connection
-	tcpAddr, err := net.ResolveTCPAddr("tcp", host+":"+port)
+	tcpAddr, err := net.ResolveTCPAddr("tcp", Host+":"+Port)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 		return
 	}
 
-	clientAddr := new(net.TCPAddr)
-	clientAddr.IP = net.ParseIP(clientIP)
-	clientAddr.Port, _ = strconv.Atoi(clientPort)
+	// Following are testing code for loacl environment
+	// clientAddr := new(net.TCPAddr)
+	// clientAddr.IP = net.ParseIP(ClientIP)
+	// clientAddr.Port, _ = strconv.Atoi(ClientPort)
 
 	log.Println("Start TCP dial")
-	conn, err := net.DialTCP("tcp", clientAddr, tcpAddr)
+	//conn, err := net.DialTCP("tcp", clientAddr, tcpAddr)
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
+		log.Printf("Error: %s\n", err.Error())
 		return
 	}
 
@@ -170,7 +146,6 @@ func main() {
 
 	log.Println("Start sending PING message")
 	go c.Ping(done)
-	//input := scan(done)
 
 	log.Println("Start receiving message")
 	response := c.Receive(done)
@@ -197,21 +172,52 @@ func main() {
 				case termbox.KeyEnter:
 					bmsg := eb.GetAndDeleteText()
 					message := string(bmsg[:])
+
+					// Exit process
 					msgTokens := strings.Split(message, " ")
 					switch msgTokens[0] {
 					case "quit":
 						log.Println("Exit by quit signal from keyboard input")
 						done <- struct{}{}
+						c.Send("LOGOUT")
 						return
-					case "ROOM":
-						if c.mode == ChatMode {
+					}
+
+					// Implement input msg process
+					var arrangedMsg string
+					switch c.mode {
+					case DirectMode:
+						arrangedMsg = message
+					case RoomMode:
+						// Get parameter like "OPEN 1".
+						switch msgTokens[0] {
+						case "open":
+							arrangedMsg = "OPEN_ROOM " + msgTokens[1]
+						case "close":
+							arrangedMsg = "CLOSE_ROOM " + msgTokens[1]
+						}
+					case ChatMode:
+						if msgTokens[0] == "room" {
 							roomID, _ := strconv.Atoi(msgTokens[1])
 							chatLogs.CurrentRoomID = roomID
+							// Skip send message
+							continue
 						}
+						// Send chat message
+						if chatLogs.CurrentRoomID != NotExist {
+							arrangedMsg = "SHOUT " +
+								fmt.Sprintf("%d ", chatLogs.CurrentRoomID) +
+								message
+						} else {
+							// Skip send message
+							continue
+						}
+					case MemberMode:
 						continue
 					}
+
 					// Server require new line character
-					c.Send(message)
+					c.Send(arrangedMsg)
 				case termbox.KeyEsc:
 					log.Println("Exit by KeyEsc signal")
 					done <- struct{}{}
@@ -226,8 +232,12 @@ func main() {
 						ts.SetTextArea(roomList)
 					case RoomMode:
 						c.mode = ChatMode
+						chatLogs.ShowRoomMember = false
 						ts.SetTextArea(chatLogs)
 					case ChatMode:
+						c.mode = MemberMode
+						chatLogs.ShowRoomMember = true
+					case MemberMode:
 						c.mode = DirectMode
 						ts.SetTextArea(connMsg)
 					}
@@ -267,6 +277,9 @@ func main() {
 						id, _ := strconv.Atoi(tokens[2])
 						chatLogs.CurrentRoomID = id
 						roomList.EnterRoom(id)
+					case "ADD_ROOM":
+						id, _ := strconv.Atoi(tokens[2])
+						chatLogs.CurrentRoomID = id
 					case "CLOSE_ROOM":
 						id, _ := strconv.Atoi(tokens[2])
 						roomList.QuitRoom(id)
@@ -275,12 +288,25 @@ func main() {
 					c.Send("OK SVR_PING")
 				case "ROOM_ADDED":
 					id, _ := strconv.Atoi(tokens[1])
-					ri := RoomInfo{id, tokens[3], tokens[4], false}
+					ri := NewRoomInfo(id, tokens[4], tokens[2])
 					roomList.AppendRoom(ri)
 				case "ROOM_REMOVED":
 					id, _ := strconv.Atoi(tokens[1])
 					roomList.RemoveRoom(id)
+				case "ENTER":
+					id, _ := strconv.Atoi(tokens[1])
+					roomList.OtherEnterRoom(id, tokens[2])
+				case "LEAVE":
+					id, _ := strconv.Atoi(tokens[1])
+					roomList.OtherLeaveRoom(id, tokens[2])
+				case "USERS":
+					id, _ := strconv.Atoi(tokens[1])
+					users := strings.Split(tokens[2], ":")
+					for _, user := range users {
+						roomList.OtherEnterRoom(id, user)
+					}
 				}
+
 			}
 		default:
 			termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
@@ -328,16 +354,10 @@ type userInfo struct {
 }
 
 func loginConversation(c *ConnClient) {
-	user := &userInfo{
-		"test",
-		1,
-		"I'm man",
-		"strong",
-		"java.vender, java.version, os.name, os.version"}
-	c.Send("LOGIN " + user.user)
-	c.Send("SET_INTRO " + user.introduction)
-	c.Send("SET_LEVEL " + user.level)
-	c.Send("CLIENT_INFO " + user.clientInfo)
-	c.Send("SET_ID " + fmt.Sprintf("%d", user.id))
-
+	// user is defined in global
+	c.Send("LOGIN " + User.user)
+	c.Send("SET_INTRO " + User.introduction)
+	c.Send("SET_LEVEL " + User.level)
+	c.Send("CLIENT_INFO " + User.clientInfo)
+	c.Send("SET_ID " + fmt.Sprintf("%d", User.id))
 }
