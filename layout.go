@@ -490,9 +490,9 @@ func Input(done <-chan struct{}) <-chan termbox.Event {
 	go func() {
 		defer close(out)
 		for {
-
 			select {
 			case <-done:
+				log.Println("Input got done")
 				// Terminaite this goroutine.
 				return
 			default:

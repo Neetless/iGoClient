@@ -41,6 +41,7 @@ func (c *ConnClient) Ping(done <-chan struct{}) {
 	for {
 		select {
 		case <-done:
+			log.Println("Ping got done")
 			return
 		case <-waitSig:
 			c.Send("PING -1")
@@ -56,8 +57,10 @@ func (c *ConnClient) Receive(done <-chan struct{}) <-chan string {
 	go func() {
 		defer close(out)
 		for {
+			time.Sleep(5 * time.Millisecond)
 			select {
 			case <-done:
+				log.Println("Receive got done")
 				return
 			default:
 				msg := make([]byte, 1024)
@@ -71,6 +74,7 @@ func (c *ConnClient) Receive(done <-chan struct{}) <-chan string {
 				log.Println("Server responce: " +
 					string(msg[:readlen]))
 				out <- string(msg[:readlen])
+				log.Println("Send responce channel")
 			}
 		}
 	}()
@@ -178,8 +182,12 @@ func main() {
 					switch msgTokens[0] {
 					case "quit":
 						log.Println("Exit by quit signal from keyboard input")
-						done <- struct{}{}
 						c.Send("LOGOUT")
+						done <- struct{}{}
+						done <- struct{}{}
+						// Unlock channel
+						<-response
+						done <- struct{}{}
 						return
 					}
 
@@ -319,11 +327,12 @@ func scan(done chan struct{}) <-chan string {
 	out := make(chan string)
 	go func() {
 		defer close(out)
-		select {
-		case <-done:
-			return
-		default:
-			for {
+		for {
+			select {
+			case <-done:
+				log.Println("scan got done")
+				return
+			default:
 				reader := bufio.NewReader(os.Stdin)
 				input, _ := reader.ReadString('\n')
 				input += "\r\n"
